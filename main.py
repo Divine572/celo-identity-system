@@ -1,57 +1,52 @@
-import json
 import os
-from getpass import getpass
-from web3 import Web3, HTTPProvider
+import deploy
+from web3 import Web3
 
-# Connect to the Celo Alfajores Testnet
-w3 = Web3(HTTPProvider('https://alfajores-forno.celo-testnet.org'))
 
-# Load the smart contract ABI
-contract_abi = json.loads('[YOUR_SMART_CONTRACT_ABI]')
 
-# Set the smart contract address
-contract_address = '0x12345...[YOUR_SMART_CONTRACT_ADDRESS]'
 
-# Initialize the contract
-contract = w3.eth.contract(address=Web3.toChecksumAddress(contract_address), abi=contract_abi)
+# Set up web3 connection
+provider_url = os.environ.get("CELO_PROVIDER_URL")
+w3 = Web3(Web3.HTTPProvider(provider_url))
+assert w3.is_connected(), "Not connected to a Celo node"
 
-def create_identity(private_key, name, email):
-    account = w3.eth.account.privateKeyToAccount(private_key)
-    nonce = w3.eth.getTransactionCount(account.address)
-    
-    # Invoke the "createIdentity" function from your smart contract
-    tx = contract.functions.createIdentity(name, email).buildTransaction({
-        'from': account.address,
-        'gas': 1000000,
-        'gasPrice': w3.toWei('1', 'gwei'),
-        'nonce': nonce
+syncing = w3.eth.syncing
+print(syncing)
+
+
+# Set deployer account and private key
+account = os.environ.get("CELO_DEPLOYER_ADDRESS")
+private_key = os.environ.get("CELO_DEPLOYER_PRIVATE_KEY")
+
+abi = deploy.abi
+contract_address = deploy.contract_address
+
+
+identity_contract = w3.eth.contract(address=contract_address, abi=abi)
+
+
+
+def create_identity(name: str, email: str):
+    nonce = w3.eth.get_transaction_count(account)
+    txn = identity_contract.functions.createIdentity(name, email).build_transaction({
+        'gas': 200000,
+        'gasPrice': w3.eth.gas_price,
+        'nonce': nonce,
     })
+    signed_txn = w3.eth.account.sign_transaction(txn, private_key)
+    txn_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+    receipt = w3.eth.wait_for_transaction_receipt(txn_hash)
+    return receipt
 
-    signed_tx = w3.eth.account.signTransaction(tx, private_key)
-    tx_hash = w3.eth.sendRawTransaction(signed_tx.rawTransaction)
-    tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
 
-    return tx_receipt
+def get_identity(address: str) -> (str, str):
+    name, email = identity_contract.functions.getIdentity(address).call()
+    return name, email
 
-def get_identity(wallet_address):
-    identity = contract.functions.getIdentity(wallet_address).call()
-    return identity
+# Create an identity
+create_identity("Kate Wolfsen", "kate@example.com")
 
-if __name__ == '__main__':
-    choice = input("Choose an option (1: Create Identity, 2: Get Identity): ")
-    
-    if choice == '1':
-        private_key = getpass("Enter your private key: ")
-        name = input("Enter your name: ")
-        email = input("Enter your email: ")
+# Get an identity
+name, email = get_identity(account)
+print(f"Name: {name}, Email: {email}")
 
-        tx_receipt = create_identity(private_key, name, email)
-        print("Identity created. Transaction receipt:", tx_receipt)
-    
-    elif choice == '2':
-        wallet_address = input("Enter the wallet address: ")
-        identity = get_identity(wallet_address)
-        print(f"Name: {identity[0]}, Email: {identity[1]}")
-    
-    else:
-        print("Invalid option")
