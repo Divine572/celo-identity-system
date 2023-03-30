@@ -28,7 +28,7 @@ with open("Identity.sol", "r") as file:
 compiled_sol = compile_standard({
     "language": "Solidity",
     "sources": {
-        "Identity.sol": {
+        "IdentityNFT.sol": {
             "content": contract_source_code
         }
     },
@@ -42,12 +42,13 @@ compiled_sol = compile_standard({
 })
 
 # Extract the contract data
-contract_data = compiled_sol['contracts']['Identity.sol']['Identity']
+contract_data = compiled_sol['contracts']['IdentityNFT.sol']['IdentityNFT']
 bytecode = contract_data['evm']['bytecode']['object']
 abi = json.loads(contract_data['metadata'])['output']['abi']
 
 # Deploy the contract
 nonce = w3.eth.get_transaction_count(deployer)
+
 transaction = {
     'nonce': nonce,
     'gas': 2000000,
@@ -62,4 +63,3 @@ transaction_receipt = w3.eth.wait_for_transaction_receipt(transaction_hash)
 contract_address = transaction_receipt['contractAddress']
 print(f"Contract deployed at address: {contract_address}")
 
-# deployed contract: 0xf0aEC1481eF8A859d581c5665c5DB2333c1c1C3f
